@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { CampNameSelect } from '../components/CampNameSelect';
 import { ClientNameSearchInput } from '../components/ClientNameSearchInput';
 import { SearchableOptionsInput } from '../components/SearchableOptionsInput';
@@ -47,6 +48,7 @@ const formNumberFields = [
 ];
 
 const emptyForm = {
+  clientId: '',
   clientName: '',
   clientCode: '',
   programName: '',
@@ -87,8 +89,10 @@ function numberInputProps(field, form, updateField, fieldErrors) {
 
 export default function ClientMasterFormPage() {
   const { id } = useParams();
+  const { hasPermission } = useAuth();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const canCreateCompany = hasPermission('clients:create');
   const [form, setForm] = useState(emptyForm);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
@@ -128,9 +132,27 @@ export default function ClientMasterFormPage() {
   }
 
   function applySuggestion(record) {
-    setForm(recordToForm(record));
+    const nextForm = recordToForm(record);
+    if (record.clientId) {
+      nextForm.clientId = String(record.clientId);
+    }
+    setForm(nextForm);
     setFieldErrors({});
     setError('');
+  }
+
+  function updateClientName(value) {
+    setForm((prev) => ({
+      ...prev,
+      clientName: value,
+      ...(canCreateCompany ? {} : { clientId: '' }),
+    }));
+    setFieldErrors((prev) => {
+      if (!prev.clientName) return prev;
+      const next = { ...prev };
+      delete next.clientName;
+      return next;
+    });
   }
 
   function validateForm() {
@@ -195,7 +217,11 @@ export default function ClientMasterFormPage() {
     try {
       await openProgramDocument(id);
     } catch (err) {
-      setDocumentError(err.response?.data?.message || 'Failed to open program document');
+      setDocumentError(err.message || 'Failed to open program document');
+      if (err.documentCleared) {
+        setDocumentMeta(null);
+        setPendingPdfFile(null);
+      }
     }
   }
 
@@ -206,9 +232,15 @@ export default function ClientMasterFormPage() {
       return;
     }
 
+    if (!canCreateCompany && !form.clientId) {
+      setError('Select an existing company from the search list. New companies can only be created by an administrator.');
+      return;
+    }
+
     const trimmed = trimFormStrings(form, formStringFields);
     const payload = {
       ...trimmed,
+      clientId: form.clientId || undefined,
       isActive: form.isActive,
     };
     formNumberFields.forEach((field) => {
@@ -255,7 +287,11 @@ export default function ClientMasterFormPage() {
         title={isEdit ? 'Edit Program Configuration' : 'New Program Configuration'}
         backTo="/client-masters"
       />
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="page-alerts">
+          <div className="error-banner">{error}</div>
+        </div>
+      )}
 
       <div className="form-grid">
         <label>
@@ -263,16 +299,21 @@ export default function ClientMasterFormPage() {
           <ClientNameSearchInput
             value={form.clientName}
             error={fieldErrors.clientName}
-            onChange={(value) => updateField('clientName', value)}
+            onChange={updateClientName}
             onSelectRecord={applySuggestion}
+            requireExistingClient={!canCreateCompany}
           />
+          {!canCreateCompany && (
+            <small className="meta-text">Select an existing company. You cannot create new companies.</small>
+          )}
         </label>
         <label>
           Client Code
           <input
             value={form.clientCode}
             onChange={(e) => updateField('clientCode', e.target.value.toUpperCase())}
-            placeholder="Optional — auto-generated if new client"
+            placeholder={canCreateCompany ? 'Optional — auto-generated if new client' : 'Filled when you select a company'}
+            readOnly={!canCreateCompany}
             className={fieldErrors.clientCode ? 'input-invalid' : ''}
           />
           <FieldError message={fieldErrors.clientCode} />

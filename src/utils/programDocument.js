@@ -23,9 +23,58 @@ export function getProgramDocumentMeta(record) {
   };
 }
 
+async function parseBlobErrorPayload(data) {
+  if (!(data instanceof Blob)) {
+    return {
+      message: data?.message || 'Failed to open program document',
+      documentCleared: Boolean(data?.documentCleared),
+      record: data?.data || null,
+    };
+  }
+
+  try {
+    const text = await data.text();
+    const json = JSON.parse(text);
+    return {
+      message: json.message || 'Failed to open program document',
+      documentCleared: Boolean(json.documentCleared),
+      record: json.data || null,
+    };
+  } catch {
+    return {
+      message: 'Failed to open program document',
+      documentCleared: false,
+      record: null,
+    };
+  }
+}
+
 export async function openProgramDocument(programId) {
-  const { data } = await clientMasterApi.downloadDocument(programId);
-  const url = window.URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-  window.open(url, '_blank', 'noopener,noreferrer');
-  window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+  try {
+    const response = await clientMasterApi.downloadDocument(programId);
+    const blob = response.data;
+
+    if (blob instanceof Blob && blob.type?.includes('application/json')) {
+      const parsed = await parseBlobErrorPayload(blob);
+      const error = new Error(parsed.message);
+      error.documentCleared = parsed.documentCleared;
+      error.record = parsed.record;
+      throw error;
+    }
+
+    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+    window.open(url, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    return { opened: true };
+  } catch (err) {
+    if (err.documentCleared != null) {
+      throw err;
+    }
+
+    const parsed = await parseBlobErrorPayload(err.response?.data);
+    const error = new Error(parsed.message || err.message || 'Failed to open program document');
+    error.documentCleared = parsed.documentCleared;
+    error.record = parsed.record;
+    throw error;
+  }
 }

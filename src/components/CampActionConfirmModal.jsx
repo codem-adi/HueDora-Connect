@@ -1,7 +1,3 @@
-import { DateInput } from './DateInput';
-
-const DURATION_OPTIONS = [3, 4, 5, 6, 8];
-
 const ACTION_COPY = {
   approve: {
     title: 'Approve camp',
@@ -23,7 +19,7 @@ const ACTION_COPY = {
   },
   cancel: {
     title: 'Cancel camp',
-    message: 'Are you sure you want to cancel this camp?',
+    message: 'Choose who cancelled this camp and add a remark.',
     confirmLabel: 'Cancel camp',
     confirmClass: 'btn-danger',
   },
@@ -37,12 +33,6 @@ const ACTION_COPY = {
     title: 'Re-submit camp',
     message: 'Are you sure you want to re-submit this camp for review?',
     confirmLabel: 'Re-submit',
-    confirmClass: 'btn-primary',
-  },
-  reschedule: {
-    title: 'Reschedule camp',
-    message: 'Update the camp date and time, then confirm reschedule.',
-    confirmLabel: 'Reschedule',
     confirmClass: 'btn-primary',
   },
 };
@@ -72,35 +62,44 @@ const BULK_ACTION_COPY = {
     confirmLabel: 'Mark executed',
     confirmClass: 'btn-primary',
   },
-  reschedule: {
-    title: 'Reschedule selected camps',
-    message: (count) => `Reschedule ${count} selected camp${count === 1 ? '' : 's'}? Date and time will not be changed in bulk.`,
-    confirmLabel: 'Reschedule selected',
-    confirmClass: 'btn-primary',
-  },
 };
 
-function updateScheduleField(schedule, field, value) {
-  const next = { ...schedule, [field]: value };
+const CANCEL_OPTIONS = [
+  { value: 'brand', label: 'Cancel by Brand', description: 'The brand requested this camp be cancelled.' },
+  { value: 'khw', label: 'Cancel by KHW', description: 'KHW cancelled this camp internally.' },
+];
 
-  if (field === 'startTime' || field === 'durationHours') {
-    const hours = Number(field === 'durationHours' ? value : next.durationHours) || 3;
-    const start = field === 'startTime' ? value : next.startTime;
-    const [h, m] = String(start || '09:00').split(':').map(Number);
-    const total = h * 60 + (m || 0) + hours * 60;
-    const endH = Math.floor(total / 60) % 24;
-    const endM = total % 60;
-    next.endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-    next.durationHours = hours;
-  }
+function CampSummary({ camp }) {
+  if (!camp) return null;
 
-  return next;
+  return (
+    <div className="modal-camp-summary modal-camp-summary-grid">
+      {camp.campId && (
+        <div className="modal-camp-summary-row">
+          <span>Camp ID</span>
+          <strong>{camp.campId}</strong>
+        </div>
+      )}
+      <div className="modal-camp-summary-row">
+        <span>Client</span>
+        <strong>{camp.clientName || '—'}</strong>
+      </div>
+      <div className="modal-camp-summary-row">
+        <span>Division</span>
+        <strong>{camp.campaignType || '—'}</strong>
+      </div>
+      <div className="modal-camp-summary-row">
+        <span>Camp</span>
+        <strong>{camp.campaignName || '—'}</strong>
+      </div>
+    </div>
+  );
 }
 
 export function CampActionConfirmModal({
   request,
-  schedule,
-  onScheduleChange,
+  cancelDetails,
+  onCancelDetailsChange,
   onConfirm,
   onCancel,
   loading = false,
@@ -115,71 +114,89 @@ export function CampActionConfirmModal({
   if (!copy) return null;
 
   const message = isBulk ? copy.message(request.count) : copy.message;
-  const showSchedule = !isBulk && request.action === 'reschedule' && schedule;
+  const showCancelForm = !isBulk && request.action === 'cancel' && cancelDetails;
+  const cancelReady = !showCancelForm
+    || (cancelDetails.cancelledBy && String(cancelDetails.remarks || '').trim());
+  const modalClassName = showCancelForm ? 'modal-card modal-card-cancel' : 'modal-card';
 
   return (
     <div className="modal-overlay" onClick={loading ? undefined : onCancel}>
       <div
-        className="modal-card"
+        className={modalClassName}
         role="dialog"
         aria-modal="true"
         aria-labelledby="camp-action-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="camp-action-modal-title">{copy.title}</h2>
-        <p className="modal-message">{message}</p>
+        {!showCancelForm && <p className="modal-message">{message}</p>}
 
-        {!isBulk && request.camp && (
+        {!isBulk && request.camp && !showCancelForm && (
           <div className="modal-camp-summary">
             <div><strong>Client:</strong> {request.camp.clientName || '—'}</div>
             <div><strong>Camp:</strong> {request.camp.campaignName || '—'}</div>
           </div>
         )}
 
-        {showSchedule && (
-          <div className="modal-form-grid">
-            <DateInput
-              id="reschedule-camp-date"
-              label="Camp date"
-              value={schedule.campDate}
-              onChange={(value) => onScheduleChange(updateScheduleField(schedule, 'campDate', value))}
-              required
-            />
-            <label>
-              Start time
-              <input
-                type="time"
-                value={schedule.startTime}
-                onChange={(e) => onScheduleChange(updateScheduleField(schedule, 'startTime', e.target.value))}
-              />
-            </label>
-            <label>
-              Duration (hours)
-              <select
-                value={schedule.durationHours}
-                onChange={(e) => onScheduleChange(updateScheduleField(schedule, 'durationHours', Number(e.target.value)))}
-              >
-                {DURATION_OPTIONS.map((hours) => (
-                  <option key={hours} value={hours}>{hours} hours</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              End time
-              <input type="time" value={schedule.endTime} readOnly />
-            </label>
-          </div>
+        {showCancelForm && (
+          <>
+            <p className="modal-message">Record who cancelled this camp and why. The remark is required.</p>
+            <CampSummary camp={request.camp} />
+
+            <div className="modal-cancel-form">
+              <div className="modal-cancel-section">
+                <p className="modal-cancel-section-title">Cancelled by</p>
+                <div className="cancel-source-options" role="radiogroup" aria-label="Cancelled by">
+                  {CANCEL_OPTIONS.map((option) => {
+                    const isSelected = cancelDetails.cancelledBy === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        className={`cancel-source-option${isSelected ? ' is-selected' : ''}`}
+                        onClick={() => onCancelDetailsChange({
+                          ...cancelDetails,
+                          cancelledBy: option.value,
+                        })}
+                      >
+                        <span className="cancel-source-option-label">{option.label}</span>
+                        <span className="cancel-source-option-text">{option.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <label className="modal-cancel-remark-field">
+                Remark
+                <textarea
+                  rows={4}
+                  value={cancelDetails.remarks}
+                  placeholder="Enter the reason for cancellation"
+                  onChange={(e) => onCancelDetailsChange({
+                    ...cancelDetails,
+                    remarks: e.target.value,
+                  })}
+                  required
+                />
+                <span className="modal-cancel-remark-hint">Required before confirming cancellation.</span>
+              </label>
+            </div>
+          </>
         )}
 
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
-            Cancel
+            Close
           </button>
           <button
             type="button"
             className={`btn ${copy.confirmClass}`}
             onClick={onConfirm}
-            disabled={loading || (showSchedule && !schedule.campDate)}
+            disabled={loading || !cancelReady}
           >
             {loading ? 'Processing...' : copy.confirmLabel}
           </button>

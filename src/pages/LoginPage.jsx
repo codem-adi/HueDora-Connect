@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { DEMO_USERS, IS_DEMO_SERVER } from '../config/constants';
 import { useAuth } from '../context/AuthContext';
 import { trimString } from '../utils/trimInput';
+import { PasswordInput } from '../components/PasswordInput';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -61,7 +62,11 @@ export default function LoginPage() {
           </div>
         )}
 
-        {error && <div className="error-banner">{error}</div>}
+        {error && (
+          <div className="auth-alerts">
+            <div className="error-banner">{error}</div>
+          </div>
+        )}
         <label>
           Email
           <input
@@ -74,11 +79,23 @@ export default function LoginPage() {
         </label>
         <label>
           Password
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+          <PasswordInput
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
         </label>
+        <p className="auth-forgot-link">
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
         <button className="btn btn-primary" disabled={loading}>
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
+
+        <p className="auth-switch-link">
+          Need access? <Link to="/signup">Request an account</Link>
+        </p>
       </form>
     </div>
   );

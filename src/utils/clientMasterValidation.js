@@ -86,7 +86,13 @@ export function hasValidationErrors(errors) {
 }
 
 export function recordToForm(record, { keepClientName = true } = {}) {
+  const clientRef = record.client;
+  const clientId = typeof clientRef === 'object' && clientRef?._id
+    ? clientRef._id
+    : (clientRef || '');
+
   return {
+    clientId: clientId ? String(clientId) : '',
     clientName: keepClientName ? (record.clientName || '') : '',
     clientCode: record.client?.code || '',
     programName: record.programName || '',

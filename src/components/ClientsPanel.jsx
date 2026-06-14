@@ -3,12 +3,18 @@ import { clientApi } from '../services/endpoints';
 import { trimFormStrings, trimString } from '../utils/trimInput';
 import { Pagination } from './Pagination';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
+import { ClientsFilters } from './ClientsFilters';
 
 const emptyClient = { name: '', code: '', isActive: true };
 
-export function ClientsPanel() {
+export function ClientsPanel({
+  initialSearch = '',
+  canCreate = false,
+  canUpdate = false,
+  canDelete = false,
+}) {
   const [clients, setClients] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [pagination, setPagination] = useState(null);
@@ -18,9 +24,13 @@ export function ClientsPanel() {
   const [form, setForm] = useState(emptyClient);
   const [saving, setSaving] = useState(false);
 
-  async function loadClients(nextPage = page, nextPageSize = pageSize) {
+  useEffect(() => {
+    loadClients(1, pageSize, initialSearch);
+  }, [initialSearch]);
+
+  async function loadClients(nextPage = page, nextPageSize = pageSize, searchValue = search) {
     setLoading(true);
-    const trimmedSearch = trimString(search);
+    const trimmedSearch = trimString(searchValue);
     setSearch(trimmedSearch);
     try {
       const params = { page: nextPage, limit: nextPageSize };
@@ -37,10 +47,6 @@ export function ClientsPanel() {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    loadClients(1);
-  }, []);
 
   function startCreate() {
     setEditingId('new');
@@ -105,25 +111,46 @@ export function ClientsPanel() {
     }
   }
 
+  function handleSearchSubmit() {
+    setPage(1);
+    loadClients(1, pageSize);
+  }
+
+  function clearAllFilters() {
+    setSearch('');
+    setPage(1);
+    loadClients(1, pageSize, '');
+  }
+
+  const activeChips = search
+    ? [{
+      key: 'search',
+      label: `Search: ${search}`,
+      onRemove: () => {
+        setSearch('');
+        setPage(1);
+        loadClients(1, pageSize, '');
+      },
+    }]
+    : [];
+
   return (
     <div>
-      <div className="toolbar">
-        <div className="field field-grow">
-          <label>
-            Search clients
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (setPage(1), loadClients(1, pageSize))}
-              placeholder="Client name or code..."
-            />
-          </label>
-        </div>
-        <button type="button" className="btn btn-secondary" onClick={() => { setPage(1); loadClients(1, pageSize); }}>Search</button>
-        <button type="button" className="btn btn-primary" onClick={startCreate}>New Client</button>
-      </div>
+      <ClientsFilters
+        search={search}
+        onSearchChange={setSearch}
+        onSearchSubmit={handleSearchSubmit}
+        canCreate={canCreate}
+        onCreate={startCreate}
+        activeChips={activeChips}
+        onClearAll={clearAllFilters}
+      />
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="page-alerts">
+          <div className="error-banner">{error}</div>
+        </div>
+      )}
 
       {editingId && (
         <form className="form-card" onSubmit={handleSave} style={{ marginBottom: '1rem' }}>
@@ -178,7 +205,7 @@ export function ClientsPanel() {
                   <th>Client Name</th>
                   <th>Code</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  {(canUpdate || canDelete) && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -187,19 +214,27 @@ export function ClientsPanel() {
                     <td>{client.name}</td>
                     <td>{client.code}</td>
                     <td>{client.isActive ? 'Active' : 'Inactive'}</td>
-                    <td>
-                      <div className="actions">
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(client)}>
-                          Edit
-                        </button>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleToggleStatus(client)}>
-                          {client.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(client)}>
-                          Archive
-                        </button>
-                      </div>
-                    </td>
+                    {(canUpdate || canDelete) && (
+                      <td>
+                        <div className="actions">
+                          {canUpdate && (
+                            <>
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(client)}>
+                                Edit
+                              </button>
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleToggleStatus(client)}>
+                                {client.isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(client)}>
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

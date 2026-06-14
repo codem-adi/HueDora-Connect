@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { DateRangeFilters } from '../components/DateRangeFilters';
-import { ChartPanel, ChartsEyeToggle, HierarchyCard, StatWidget } from '../components/DashboardWidgets';
+import { ChartPanel, HierarchyCard, StatWidget } from '../components/DashboardWidgets';
 import { dashboardApi } from '../services/endpoints';
 import { getDefaultMonthDateRange } from '../utils/dateRange';
+
+function buildClientMastersLink({ tab = 'clients', search } = {}) {
+  const params = new URLSearchParams();
+  if (tab) params.set('tab', tab);
+  if (search) params.set('search', search);
+  const query = params.toString();
+  return `/client-masters${query ? `?${query}` : ''}`;
+}
 
 function buildCampsLink({
   status,
@@ -38,7 +46,6 @@ const statusCards = [
   { key: 'executed', label: 'Executed' },
   { key: 'rejected', label: 'Rejected' },
   { key: 'cancelled', label: 'Cancelled' },
-  { key: 'rescheduled', label: 'Rescheduled' },
   { key: 'overdue_not_executed', label: 'Overdue', overdue: true },
 ];
 
@@ -68,9 +75,9 @@ const alertCards = [
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { showCharts = false } = useOutletContext() || {};
   const defaults = getDefaultMonthDateRange();
   const [stats, setStats] = useState(null);
-  const [showCharts, setShowCharts] = useState(false);
   const [dateFrom, setDateFrom] = useState(defaults.dateFrom);
   const [dateTo, setDateTo] = useState(defaults.dateTo);
   const [appliedRange, setAppliedRange] = useState(defaults);
@@ -115,7 +122,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="dashboard-toolbar dashboard-toolbar-split">
+      <div className="dashboard-toolbar">
         <div className="dashboard-filter-panel panel">
           <DateRangeFilters
             idPrefix="dashboard-date"
@@ -131,13 +138,13 @@ export default function DashboardPage() {
             showClear={Boolean(appliedRange.dateFrom || appliedRange.dateTo)}
           />
         </div>
-        <ChartsEyeToggle
-          showCharts={showCharts}
-          onToggle={() => setShowCharts((prev) => !prev)}
-        />
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="page-alerts">
+          <div className="error-banner">{error}</div>
+        </div>
+      )}
 
       <div className="dashboard-hierarchy-note">
         Brand → Campaign / Division → Camp
@@ -214,8 +221,8 @@ export default function DashboardPage() {
           // subtitle="Clients e.g. Sun Pharma"
           total={stats.hierarchy.brands.total}
           items={stats.hierarchy.brands.items}
-          onTotalClick={() => navigate(buildCampsLink(linkParams))}
-          onItemClick={(item) => navigate(buildCampsLink({ ...linkParams, client: item.id }))}
+          onTotalClick={() => navigate(buildClientMastersLink())}
+          onItemClick={(item) => navigate(buildClientMastersLink({ search: item.label }))}
         />
         <HierarchyCard
           title="Campaigns / Divisions"

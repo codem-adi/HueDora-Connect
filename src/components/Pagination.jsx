@@ -1,4 +1,5 @@
 import { PAGE_SIZE_OPTIONS } from '../constants/pagination';
+import { SelectDropdown } from './SelectDropdown';
 
 export function Pagination({
   pagination,
@@ -17,17 +18,19 @@ export function Pagination({
         Page {pagination.page} of {pagination.pages} ({pagination.total} {itemLabel})
       </span>
       <div className="actions pagination-actions">
-        <label className="page-size-control" htmlFor={`page-size-${itemLabel}`}>
+        <label className="page-size-control">
           Rows per page
-          <select
+          <SelectDropdown
             id={`page-size-${itemLabel}`}
-            value={currentPageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
+            value={String(currentPageSize)}
+            options={PAGE_SIZE_OPTIONS.map((size) => ({
+              value: String(size),
+              label: String(size),
+            }))}
+            onChange={(value) => onPageSizeChange(Number(value))}
+            className="pagination-select"
+            hideLabel
+          />
         </label>
         <button
           type="button"

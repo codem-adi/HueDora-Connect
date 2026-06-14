@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ChartsEyeToggle } from '../components/DashboardWidgets';
 import { useAuth } from '../context/AuthContext';
 
 const SIDEBAR_COLLAPSED_KEY = 'k-dashboard-sidebar-collapsed';
@@ -9,6 +10,7 @@ const pageTitles = {
   '/camps': { title: 'Camps', subtitle: 'Review, approve, execute and manage camps' },
   '/client-masters': { title: 'Client Master', subtitle: 'Manage client program, pricing and camp configuration' },
   '/import': { title: 'Excel Import', subtitle: 'Upload, map headers, preview and import camps' },
+  '/users': { title: 'Users', subtitle: 'Manage user access, roles and signup approvals' },
 };
 
 function getPageMeta(pathname) {
@@ -59,6 +61,14 @@ function IconImport() {
   );
 }
 
+function IconUsers() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.09.37-2.09.97-2.87A9.8 9.8 0 0 0 8 13zm8 0c-.69 0-1.35.07-1.97.2A5.94 5.94 0 0 1 16 17v2h6v-2c0-2.66-5.33-4-8-4z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -94,19 +104,27 @@ function NavItem({ to, end, label, icon, collapsed }) {
 }
 
 export default function AppLayout() {
-  const { user, logout, isAdminUser, hasPermission } = useAuth();
+  const { user, logout, isAdminUser, isStrictAdmin, hasPermission } = useAuth();
   const { pathname } = useLocation();
   const meta = getPageMeta(pathname);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showCharts, setShowCharts] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => (
     localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
   ));
+  const isDashboard = pathname === '/';
   const showNewCampButton = pathname === '/camps'
     && (hasPermission('camps:create') || hasPermission('camps:update'));
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!isDashboard) {
+      setShowCharts(false);
+    }
+  }, [isDashboard]);
 
   const userInitial = user?.name?.trim()?.charAt(0)?.toUpperCase() || '?';
 
@@ -141,12 +159,17 @@ export default function AppLayout() {
         </div>
         <nav className="nav-list">
           <NavItem to="/" end label="Dashboard" icon={<IconDashboard />} collapsed={sidebarCollapsed} />
+          {hasPermission('camps:read') && (
+            <NavItem to="/camps" label="Camps" icon={<IconCamps />} collapsed={sidebarCollapsed} />
+          )}
+          {hasPermission('client-masters:read') && (
+            <NavItem to="/client-masters" label="Client Master" icon={<IconClients />} collapsed={sidebarCollapsed} />
+          )}
           {isAdminUser() && (
-            <>
-              <NavItem to="/camps" label="Camps" icon={<IconCamps />} collapsed={sidebarCollapsed} />
-              <NavItem to="/client-masters" label="Client Master" icon={<IconClients />} collapsed={sidebarCollapsed} />
-              <NavItem to="/import" label="Excel Import" icon={<IconImport />} collapsed={sidebarCollapsed} />
-            </>
+            <NavItem to="/import" label="Excel Import" icon={<IconImport />} collapsed={sidebarCollapsed} />
+          )}
+          {isStrictAdmin() && (
+            <NavItem to="/users" label="Users" icon={<IconUsers />} collapsed={sidebarCollapsed} />
           )}
         </nav>
         <div className="sidebar-footer">
@@ -176,14 +199,22 @@ export default function AppLayout() {
             <h2>{meta.title}</h2>
             {meta.subtitle && <p>{meta.subtitle}</p>}
           </div>
-          {showNewCampButton && (
-            <Link to="/camps/new" className="btn btn-primary topbar-action">
-              New Camp
-            </Link>
-          )}
+          <div className="topbar-actions">
+            {isDashboard && (
+              <ChartsEyeToggle
+                showCharts={showCharts}
+                onToggle={() => setShowCharts((value) => !value)}
+              />
+            )}
+            {showNewCampButton && (
+              <Link to="/camps/new" className="btn btn-primary topbar-action">
+                New Camp
+              </Link>
+            )}
+          </div>
         </div>
         <div className="page-content">
-          <Outlet />
+          <Outlet context={{ showCharts }} />
         </div>
       </main>
 

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { clientMasterApi } from '../services/endpoints';
 import { trimString } from '../utils/trimInput';
 import { ClientsPanel } from '../components/ClientsPanel';
+import { ClientMasterProgramsFilters } from '../components/ClientMasterProgramsFilters';
 import { Pagination } from '../components/Pagination';
 import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
 import { openProgramDocument } from '../utils/programDocument';
@@ -13,7 +15,11 @@ function formatAmount(value) {
 }
 
 export default function ClientMastersPage() {
-  const [activeTab, setActiveTab] = useState('programs');
+  const { hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'clients' ? 'clients' : 'programs';
+  const initialClientSearch = searchParams.get('search') || '';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [records, setRecords] = useState([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -22,9 +28,9 @@ export default function ClientMastersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function loadRecords(nextPage = page, nextPageSize = pageSize) {
+  async function loadRecords(nextPage = page, nextPageSize = pageSize, searchValue = search) {
     setLoading(true);
-    const trimmedSearch = trimString(search);
+    const trimmedSearch = trimString(searchValue);
     setSearch(trimmedSearch);
     try {
       const params = { page: nextPage, limit: nextPageSize };
@@ -40,6 +46,23 @@ export default function ClientMastersPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') === 'clients' ? 'clients' : 'programs';
+    setActiveTab(tab);
+  }, [searchParams]);
+
+  function switchTab(tab) {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams);
+    if (tab === 'clients') {
+      params.set('tab', 'clients');
+    } else {
+      params.delete('tab');
+      params.delete('search');
+    }
+    setSearchParams(params, { replace: true });
   }
 
   useEffect(() => {
@@ -75,51 +98,84 @@ export default function ClientMastersPage() {
   async function handlePreviewDocument(recordId) {
     try {
       await openProgramDocument(recordId);
+      setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to open program document');
+      setError(err.message || 'Failed to open program document');
+      if (err.documentCleared) {
+        await loadRecords(page);
+      }
     }
   }
 
+  function handleSearch() {
+    setPage(1);
+    loadRecords(1, pageSize);
+  }
+
+  function clearProgramFilters() {
+    setSearch('');
+    setPage(1);
+    loadRecords(1, pageSize, '');
+  }
+
+  const programFilterChips = search
+    ? [{
+      key: 'search',
+      label: `Search: ${search}`,
+      onRemove: () => {
+        setSearch('');
+        setPage(1);
+        loadRecords(1, pageSize, '');
+      },
+    }]
+    : [];
+
   return (
-    <div>
-      <div className="toolbar" style={{ marginBottom: '1rem' }}>
+    <div className="client-masters-page">
+      <div className="page-tabs" role="tablist" aria-label="Client Master views">
         <button
           type="button"
-          className={`btn ${activeTab === 'programs' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('programs')}
+          role="tab"
+          aria-selected={activeTab === 'programs'}
+          className={`page-tab${activeTab === 'programs' ? ' is-active' : ''}`}
+          onClick={() => switchTab('programs')}
         >
           Program Configuration
         </button>
         <button
           type="button"
-          className={`btn ${activeTab === 'clients' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('clients')}
+          role="tab"
+          aria-selected={activeTab === 'clients'}
+          className={`page-tab${activeTab === 'clients' ? ' is-active' : ''}`}
+          onClick={() => switchTab('clients')}
         >
           Clients
         </button>
       </div>
 
       {activeTab === 'clients' ? (
-        <ClientsPanel />
+        <ClientsPanel
+          initialSearch={initialClientSearch}
+          canCreate={hasPermission('clients:create')}
+          canUpdate={hasPermission('clients:update')}
+          canDelete={hasPermission('clients:delete')}
+        />
       ) : (
         <>
-          <div className="toolbar">
-            <div className="field field-grow">
-              <label>
-                Client name
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Search by client name, program, camp..."
-                />
-              </label>
-            </div>
-            <button type="button" className="btn btn-secondary" onClick={handleSearch}>Search</button>
-            <Link to="/client-masters/new" className="btn btn-primary">New Program Config</Link>
-          </div>
+          <ClientMasterProgramsFilters
+            search={search}
+            onSearchChange={setSearch}
+            onSearchSubmit={handleSearch}
+            showCreateLink={hasPermission('client-masters:create')}
+            activeChips={programFilterChips}
+            onClearAll={clearProgramFilters}
+          />
 
-          {error && <div className="error-banner">{error}</div>}
+          {error && (
+            <div className="page-alerts">
+              <div className="error-banner">{error}</div>
+            </div>
+          )}
 
           <div className="table-card">
             {loading ? (
@@ -178,10 +234,14 @@ export default function ClientMastersPage() {
                         </td>
                         <td>
                           <div className="actions">
-                            <Link to={`/client-masters/${record._id}/edit`} className="btn btn-secondary btn-sm">Edit</Link>
-                            <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(record._id)}>
-                              Archive
-                            </button>
+                            {hasPermission('client-masters:update') && (
+                              <Link to={`/client-masters/${record._id}/edit`} className="btn btn-secondary btn-sm">Edit</Link>
+                            )}
+                            {hasPermission('client-masters:delete') && (
+                              <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(record._id)}>
+                                Archive
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

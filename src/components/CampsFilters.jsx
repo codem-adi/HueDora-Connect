@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { DateInput } from './DateInput';
+import { SelectDropdown } from './SelectDropdown';
 import { getQuickDateRange, matchQuickPreset } from '../utils/dateRange';
 
 const quickPresets = [
@@ -21,7 +22,6 @@ const statusOptions = [
   { value: 'executed', label: 'Executed' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'cancelled', label: 'Cancelled' },
-  { value: 'rescheduled', label: 'Rescheduled' },
 ];
 
 export function CampsFilters({
@@ -114,22 +114,17 @@ export function CampsFilters({
         </section>
 
         <section className="camps-filter-section">
-          <label className="camps-filter-section-title" htmlFor="camps-status-filter">
-            Status & alerts
-          </label>
-          <select id="camps-status-filter" value={filterValue} onChange={(e) => onFilterChange(e.target.value)}>
-            <option value="">All camps</option>
-            <optgroup label="Alerts">
-              {alertOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Camp status">
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </optgroup>
-          </select>
+          <SelectDropdown
+            id="camps-status-filter"
+            label="Status & alerts"
+            value={filterValue}
+            options={[
+              { value: '', label: 'All camps' },
+              ...alertOptions.map((option) => ({ value: option.value, label: option.label })),
+              ...statusOptions.map((option) => ({ value: option.value, label: option.label })),
+            ]}
+            onChange={onFilterChange}
+          />
         </section>
       </div>
 

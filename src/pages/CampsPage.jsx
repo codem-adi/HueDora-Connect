@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CampsFilters } from '../components/CampsFilters';
 import { CampActionConfirmModal } from '../components/CampActionConfirmModal';
@@ -9,21 +9,23 @@ import { AlertBadge, getCampRowClassName, StatusBadge } from '../components/Dash
 import { useAuth } from '../context/AuthContext';
 import { campApi } from '../services/endpoints';
 import { trimString } from '../utils/trimInput';
+import { validateBulkCampAction } from '../utils/campBulkActions';
+import { useAutoDismiss } from '../hooks/useAutoDismiss';
 
-import { formatDateDDMMYYYY, formatDateRangeLabel, formatDateTimeDDMMYYYY, toApiDateValue } from '../utils/dateFormat';
+import { formatDateDDMMYYYY, formatDateRangeLabel } from '../utils/dateFormat';
 
-const EDITABLE_STATUSES = ['pending_review', 'approved', 'rescheduled', 'rejected'];
-
-function canEditCamp(camp) {
-  return EDITABLE_STATUSES.includes(camp.status);
-}
-
-function formatDateTime(value) {
-  return formatDateTimeDDMMYYYY(value);
+function buildCancelDetails() {
+  return { cancelledBy: 'brand', remarks: '' };
 }
 
 export default function CampsPage() {
-  const { hasPermission, isSuperAdmin } = useAuth();
+  const {
+    hasPermission,
+    isSuperAdmin,
+    canApproveCamps,
+    canRejectCamps,
+    canEditCampRecord,
+  } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [camps, setCamps] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -46,17 +48,14 @@ export default function CampsPage() {
   const [error, setError] = useState('');
   const [bulkMessage, setBulkMessage] = useState('');
   const [confirmRequest, setConfirmRequest] = useState(null);
-  const [confirmSchedule, setConfirmSchedule] = useState(null);
+  const [confirmCancelDetails, setConfirmCancelDetails] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
-  function buildRescheduleSchedule(camp) {
-    return {
-      campDate: toApiDateValue(camp.campDate),
-      startTime: camp.startTime || '09:00',
-      endTime: camp.endTime || '12:00',
-      durationHours: camp.durationHours || 3,
-    };
-  }
+  const dismissError = useCallback(() => setError(''), []);
+  const dismissBulkMessage = useCallback(() => setBulkMessage(''), []);
+
+  useAutoDismiss(error, dismissError);
+  useAutoDismiss(bulkMessage, dismissBulkMessage);
 
   function openCampActionConfirm(action, camp) {
     setConfirmRequest({
@@ -64,28 +63,45 @@ export default function CampsPage() {
       action,
       camp,
     });
-    setConfirmSchedule(action === 'reschedule' ? buildRescheduleSchedule(camp) : null);
+    setConfirmCancelDetails(action === 'cancel' ? buildCancelDetails() : null);
     setError('');
   }
 
+  function getBulkAuth() {
+    return {
+      hasPermission,
+      canApproveCamps,
+      canRejectCamps,
+      isSuperAdmin,
+    };
+  }
+
+  function getSelectedCamps() {
+    return camps.filter((camp) => selectedIds.includes(camp._id));
+  }
+
   function openBulkActionConfirm(action) {
-    if (!selectedIds.length) {
-      setError('Select at least one camp');
+    const validation = validateBulkCampAction(action, getSelectedCamps(), getBulkAuth());
+    if (!validation.ok) {
+      setBulkMessage('');
+      setError(validation.message);
       return;
     }
+
     setConfirmRequest({
       mode: 'bulk',
       action,
-      count: selectedIds.length,
+      count: validation.count,
+      ids: validation.ids,
     });
-    setConfirmSchedule(null);
+    setConfirmCancelDetails(null);
     setError('');
   }
 
   function closeCampActionConfirm() {
     if (confirmLoading) return;
     setConfirmRequest(null);
-    setConfirmSchedule(null);
+    setConfirmCancelDetails(null);
   }
 
   async function executeCampActionConfirm() {
@@ -97,8 +113,17 @@ export default function CampsPage() {
 
     try {
       if (confirmRequest.mode === 'bulk') {
+        const selectedCamps = camps.filter((camp) => (
+          (confirmRequest.ids || selectedIds).includes(camp._id)
+        ));
+        const validation = validateBulkCampAction(confirmRequest.action, selectedCamps, getBulkAuth());
+        if (!validation.ok) {
+          setError(validation.message);
+          return;
+        }
+
         const { data } = await campApi.bulkAction({
-          ids: selectedIds,
+          ids: validation.ids,
           action: confirmRequest.action,
         });
         setBulkMessage(`${data.summary.success} succeeded, ${data.summary.failed} failed`);
@@ -107,12 +132,17 @@ export default function CampsPage() {
         }
       } else {
         const { action, camp } = confirmRequest;
-        const payload = action === 'reschedule' ? confirmSchedule : {};
-        await campApi[action](camp._id, payload);
+        const payload = action === 'cancel'
+          ? {
+            cancelledBy: confirmCancelDetails.cancelledBy,
+            remarks: confirmCancelDetails.remarks.trim(),
+          }
+          : {};
+        await runCampAction(action, camp, payload);
       }
 
       setConfirmRequest(null);
-      setConfirmSchedule(null);
+      setConfirmCancelDetails(null);
       await loadCamps();
     } catch (err) {
       setError(err.response?.data?.message || 'Action failed');
@@ -122,9 +152,35 @@ export default function CampsPage() {
   }
 
   function requestCampAction(campId, action) {
-    const camp = camps.find((item) => item._id === campId);
-    if (!camp) return;
+    const camp = camps.find((item) => String(item._id) === String(campId));
+    if (!camp) {
+      setError('Camp not found. Refresh the list and try again.');
+      return;
+    }
     openCampActionConfirm(action, camp);
+  }
+
+  async function runCampAction(action, camp, payload = {}) {
+    const handlers = {
+      approve: campApi.approve,
+      reject: campApi.reject,
+      cancel: campApi.cancel,
+      execute: campApi.execute,
+      submitReview: campApi.submitReview,
+      delete: campApi.delete,
+    };
+
+    const handler = handlers[action];
+    if (!handler) {
+      throw new Error(`Unsupported camp action: ${action}`);
+    }
+
+    if (action === 'delete') {
+      await handler(camp._id);
+      return;
+    }
+
+    await handler(camp._id, payload);
   }
 
   async function loadCamps(nextPage = page, nextLimit = pageSize) {
@@ -402,7 +458,17 @@ export default function CampsPage() {
     }
   }
 
-  const canBulkManage = hasPermission('camps:approve') || hasPermission('camps:update') || hasPermission('camps:execute');
+  const canBulkManage = canApproveCamps()
+    || canRejectCamps()
+    || hasPermission('camps:update')
+    || hasPermission('camps:execute');
+
+  const selectedCamps = camps.filter((camp) => selectedIds.includes(camp._id));
+  const bulkAuth = getBulkAuth();
+  const bulkApproveValidation = validateBulkCampAction('approve', selectedCamps, bulkAuth);
+  const bulkRejectValidation = validateBulkCampAction('reject', selectedCamps, bulkAuth);
+  const bulkExecuteValidation = validateBulkCampAction('execute', selectedCamps, bulkAuth);
+  const bulkDeleteValidation = validateBulkCampAction('delete', selectedCamps, bulkAuth);
 
   return (
     <>
@@ -426,36 +492,55 @@ export default function CampsPage() {
       {canBulkManage && selectedIds.length > 0 && (
         <div className="bulk-bar">
           <span>{selectedIds.length} selected</span>
-          {hasPermission('camps:approve') && (
-            <>
-              <button className="btn btn-primary btn-sm" disabled={bulkLoading || confirmLoading} onClick={() => handleBulk('approve')}>
-                Approve Selected
-              </button>
-              <button className="btn btn-danger btn-sm" disabled={bulkLoading || confirmLoading} onClick={() => handleBulk('reject')}>
-                Reject Selected
-              </button>
-            </>
+          {canApproveCamps() && (
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={bulkLoading || confirmLoading || !bulkApproveValidation.ok}
+              title={!bulkApproveValidation.ok ? bulkApproveValidation.message : undefined}
+              onClick={() => handleBulk('approve')}
+            >
+              Approve Selected
+            </button>
+          )}
+          {canRejectCamps() && (
+            <button
+              className="btn btn-danger btn-sm"
+              disabled={bulkLoading || confirmLoading || !bulkRejectValidation.ok}
+              title={!bulkRejectValidation.ok ? bulkRejectValidation.message : undefined}
+              onClick={() => handleBulk('reject')}
+            >
+              Reject Selected
+            </button>
           )}
           {hasPermission('camps:execute') && (
-            <button className="btn btn-primary btn-sm" disabled={bulkLoading || confirmLoading} onClick={() => handleBulk('execute')}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={bulkLoading || confirmLoading || !bulkExecuteValidation.ok}
+              title={!bulkExecuteValidation.ok ? bulkExecuteValidation.message : undefined}
+              onClick={() => handleBulk('execute')}
+            >
               Mark Executed
             </button>
           )}
-          {(hasPermission('camps:approve') || isSuperAdmin()) && (
-            <button className="btn btn-secondary btn-sm" disabled={bulkLoading || confirmLoading} onClick={() => handleBulk('reschedule')}>
-              Reschedule Selected
-            </button>
-          )}
           {(hasPermission('camps:update') || hasPermission('camps:approve')) && (
-            <button className="btn btn-danger btn-sm" disabled={bulkLoading || confirmLoading} onClick={() => handleBulk('delete')}>
+            <button
+              className="btn btn-danger btn-sm"
+              disabled={bulkLoading || confirmLoading || !bulkDeleteValidation.ok}
+              title={!bulkDeleteValidation.ok ? bulkDeleteValidation.message : undefined}
+              onClick={() => handleBulk('delete')}
+            >
               Delete Selected
             </button>
           )}
         </div>
       )}
 
-      {bulkMessage && <div className="success-banner">{bulkMessage}</div>}
-      {error && <div className="error-banner">{error}</div>}
+      {(bulkMessage || error) && (
+        <div className="page-alerts">
+          {bulkMessage && <div className="success-banner">{bulkMessage}</div>}
+          {error && <div className="error-banner">{error}</div>}
+        </div>
+      )}
 
       <div className="table-card">
         {loading ? (
@@ -506,9 +591,6 @@ export default function CampsPage() {
                     <td>{camp.campaignName}</td>
                     <td>
                       <div>{camp.timeFrame}</div>
-                      {camp.isOverdue && (
-                        <small className="meta-text">Ended {formatDateTime(camp.endsAt)} — awaiting execution</small>
-                      )}
                     </td>
                     <td>{camp.doctorName}</td>
                     <td>{camp.city}</td>
@@ -521,12 +603,12 @@ export default function CampsPage() {
                     </td>
                     <td>
                       <div className="actions camp-row-actions">
-                        {(hasPermission('camps:update') || hasPermission('camps:approve')) && canEditCamp(camp) && (
+                        {canEditCampRecord(camp) && (
                           <Link to={`/camps/${camp._id}/edit`} className="btn btn-secondary btn-sm">
                             Edit
                           </Link>
                         )}
-                        {camp.status === 'pending_review' && hasPermission('camps:approve') && (
+                        {camp.status === 'pending_review' && canApproveCamps() && (
                           <button
                             className="btn btn-primary btn-sm"
                             disabled={camp.canApprove === false}
@@ -534,6 +616,14 @@ export default function CampsPage() {
                             onClick={() => openCampActionConfirm('approve', camp)}
                           >
                             Approve
+                          </button>
+                        )}
+                        {camp.status === 'pending_review' && canRejectCamps() && (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => openCampActionConfirm('reject', camp)}
+                          >
+                            Reject
                           </button>
                         )}
                         {camp.status === 'approved' && hasPermission('camps:execute') && (
@@ -544,6 +634,7 @@ export default function CampsPage() {
                         <CampRowInfoMenu
                           camp={camp}
                           hasPermission={hasPermission}
+                          canRejectCamps={canRejectCamps()}
                           isSuperAdmin={isSuperAdmin}
                           onAction={requestCampAction}
                         />
@@ -567,8 +658,8 @@ export default function CampsPage() {
 
       <CampActionConfirmModal
         request={confirmRequest}
-        schedule={confirmSchedule}
-        onScheduleChange={setConfirmSchedule}
+        cancelDetails={confirmCancelDetails}
+        onCancelDetailsChange={setConfirmCancelDetails}
         onConfirm={executeCampActionConfirm}
         onCancel={closeCampActionConfirm}
         loading={confirmLoading}

@@ -3,6 +3,9 @@ import { trimParams } from '../utils/trimInput';
 
 export const authApi = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  signup: (payload) => api.post('/auth/signup', payload),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (payload) => api.post('/auth/reset-password', payload),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
 };
@@ -21,7 +24,6 @@ export const campApi = {
   approve: (id, payload = {}) => api.post(`/camps/${id}/approve`, payload),
   reject: (id, payload = {}) => api.post(`/camps/${id}/reject`, payload),
   cancel: (id, payload = {}) => api.post(`/camps/${id}/cancel`, payload),
-  reschedule: (id, payload = {}) => api.post(`/camps/${id}/reschedule`, payload),
   execute: (id, payload = {}) => api.post(`/camps/${id}/execute`, payload),
   delete: (id) => api.delete(`/camps/${id}`),
   bulkAction: (payload) => api.post('/camps/bulk-action', payload),
@@ -69,4 +71,16 @@ export const importApi = {
   templates: () => api.get('/import/templates'),
   saveTemplate: (payload) => api.post('/import/templates', payload),
   deleteTemplate: (id) => api.delete(`/import/templates/${id}`),
+};
+
+export const userApi = {
+  list: (params) => api.get('/users', { params: trimParams(params) }),
+  get: (id) => api.get(`/users/${id}`),
+  create: (payload) => api.post('/users', payload),
+  update: (id, payload) => api.put(`/users/${id}`, payload),
+  approve: (id, payload = {}) => api.post(`/users/${id}/approve`, payload),
+  reject: (id) => api.post(`/users/${id}/reject`),
+  activate: (id) => api.post(`/users/${id}/activate`),
+  deactivate: (id) => api.post(`/users/${id}/deactivate`),
+  roles: () => api.get('/users/roles'),
 };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { campApi, clientApi, clientMasterApi } from '../services/endpoints';
 import { trimFormStrings } from '../utils/trimInput';
 import { toApiDateValue } from '../utils/dateFormat';
@@ -10,7 +11,7 @@ import { StateSearchInput } from '../components/StateSearchInput';
 import { buildSourcePreview } from '../utils/formatSourceMessage';
 import { CAMP_NAME_OPTIONS } from '../constants/campNames';
 
-const EDITABLE_STATUSES = ['pending_review', 'approved', 'rescheduled', 'rejected'];
+const EDITABLE_STATUSES = ['pending_review', 'approved', 'rejected'];
 
 const NO_DIVISION_MESSAGE = 'Create business unit / division first in Client Master before creating a camp.';
 
@@ -67,6 +68,7 @@ const emptyForm = {
 
 export default function CampFormPage() {
   const { id } = useParams();
+  const { canEditCampRecord } = useAuth();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
@@ -140,7 +142,12 @@ export default function CampFormPage() {
           whatsappRawMessage: camp.whatsappRawMessage,
           submittedAt: camp.submittedAt || camp.createdAt,
         });
-        setReadOnly(!EDITABLE_STATUSES.includes(camp.status));
+        if (!canEditCampRecord(camp)) {
+          setError('You can only edit camps that are pending review.');
+          setReadOnly(true);
+        } else {
+          setReadOnly(!EDITABLE_STATUSES.includes(camp.status));
+        }
         setForm({
           clientId: camp.client?._id || camp.client || '',
           campaignName: camp.campaignName || 'BMD',

@@ -10,9 +10,30 @@ import { formatDateDDMMYYYY } from '../utils/dateFormat';
 const STEPS_ADMIN = ['Upload', 'Map Headers', 'Preview', 'Import'];
 const STEPS_EMPLOYEE = ['Upload', 'Preview', 'Import'];
 
+async function parseApiErrorMessage(err, fallback) {
+  const data = err.response?.data;
+  if (data instanceof Blob) {
+    try {
+      const json = JSON.parse(await data.text());
+      return json.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return err.response?.data?.message || err.message || fallback;
+}
+
 async function downloadSampleFile() {
-  const { data } = await importApi.downloadSample();
-  const url = window.URL.createObjectURL(new Blob([data]));
+  const response = await importApi.downloadSample();
+  const blob = response.data;
+  if (!(blob instanceof Blob)) {
+    throw new Error('Invalid sample file response');
+  }
+  if (blob.type && blob.type.includes('application/json')) {
+    const json = JSON.parse(await blob.text());
+    throw new Error(json.message || 'Failed to download sample file');
+  }
+  const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = 'camp-import-sample.xlsx';
@@ -207,7 +228,7 @@ export default function ImportPage() {
     try {
       await downloadSampleFile();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to download sample file');
+      setError(await parseApiErrorMessage(err, 'Failed to download sample file'));
     }
   }
 
@@ -232,10 +253,14 @@ export default function ImportPage() {
         ))}
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
-      {result && (
-        <div className="success-banner">
-          Import complete: {result.summary.created} created, {result.summary.skipped} skipped, {result.summary.invalid} invalid.
+      {(error || result) && (
+        <div className="page-alerts">
+          {error && <div className="error-banner">{error}</div>}
+          {result && (
+            <div className="success-banner">
+              Import complete: {result.summary.created} created, {result.summary.skipped} skipped, {result.summary.invalid} invalid.
+            </div>
+          )}
         </div>
       )}
 
@@ -255,7 +280,7 @@ export default function ImportPage() {
           <div className="sample-download-panel">
             <div>
               <strong>{isAdminImport ? 'Standard import format' : 'Step 1: Use the standard format'}</strong>
-              <p>Download the sample file with the correct column headers and one example row.</p>
+              <p>Download the sample file with the correct column headers and 15 example camp rows.</p>
             </div>
             <button type="button" className="btn btn-secondary" onClick={handleDownloadSample}>
               Download Sample Excel
@@ -281,7 +306,7 @@ export default function ImportPage() {
       {isAdminImport && step >= 1 && fileMeta && (
         <div className="import-card">
           <h3>Header Mapping</h3>
-          <div className="info-banner" style={{ marginBottom: 16 }}>
+          <div className="info-banner">
             File: <strong>{fileMeta.fileName}</strong> | Sheet: <strong>{fileMeta.sheetName}</strong> | Rows: <strong>{fileMeta.totalRows}</strong>
           </div>
 
@@ -373,7 +398,7 @@ export default function ImportPage() {
         <div className="import-card">
           <h3>Preview & Validation</h3>
           {!isAdminImport && fileMeta && (
-            <div className="info-banner" style={{ marginBottom: 16 }}>
+            <div className="info-banner">
               File: <strong>{fileMeta.fileName}</strong> | Sheet: <strong>{fileMeta.sheetName}</strong> | Rows: <strong>{fileMeta.totalRows}</strong>
             </div>
           )}
@@ -500,7 +525,7 @@ export default function ImportPage() {
             <div className="summary-card"><span>Invalid</span><strong>{result.summary.invalid}</strong></div>
           </div>
           {result.skipped?.length > 0 && (
-            <div className="info-banner" style={{ marginBottom: 12 }}>
+            <div className="info-banner">
               Some rows were skipped because the client name did not match existing clients.
             </div>
           )}

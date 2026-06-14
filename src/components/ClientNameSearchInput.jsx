@@ -19,6 +19,7 @@ export function ClientNameSearchInput({
   onChange,
   onSelectRecord,
   disabled = false,
+  requireExistingClient = false,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [clientSuggestions, setClientSuggestions] = useState([]);
@@ -98,13 +99,17 @@ export function ClientNameSearchInput({
   function handleSelectMaster(record) {
     closeDropdown();
     onChange(record.clientName || '');
-    onSelectRecord(record);
+    onSelectRecord({
+      ...record,
+      clientId: record.client?._id || record.client || '',
+    });
   }
 
   function handleSelectClient(client) {
     closeDropdown();
     onChange(client.name);
     onSelectRecord({
+      clientId: client._id,
       clientName: client.name,
       client: { code: client.code },
       programName: '',
@@ -160,7 +165,7 @@ export function ClientNameSearchInput({
         }}
         onFocus={openDropdown}
         onKeyDown={handleKeyDown}
-        placeholder="Search or type client name, e.g. Intas"
+        placeholder={requireExistingClient ? 'Search and select an existing company' : 'Search or type client name, e.g. Intas'}
         autoComplete="off"
         disabled={disabled}
         role="combobox"
@@ -173,7 +178,9 @@ export function ClientNameSearchInput({
         <div className="client-search-dropdown" role="listbox">
           {loading && <div className="client-search-item muted">Searching...</div>}
           {!loading && !hasResults && (
-            <div className="client-search-item muted">No matching clients found</div>
+            <div className="client-search-item muted">
+              {requireExistingClient ? 'No matching companies found' : 'No matching clients found'}
+            </div>
           )}
           {!loading && masterByClient.length > 0 && (
             <>
