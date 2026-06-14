@@ -1,0 +1,220 @@
+import { useEffect, useState } from 'react';
+import { clientApi } from '../services/endpoints';
+import { trimFormStrings, trimString } from '../utils/trimInput';
+import { Pagination } from './Pagination';
+import { DEFAULT_PAGE_SIZE } from '../constants/pagination';
+
+const emptyClient = { name: '', code: '', isActive: true };
+
+export function ClientsPanel() {
+  const [clients, setClients] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyClient);
+  const [saving, setSaving] = useState(false);
+
+  async function loadClients(nextPage = page, nextPageSize = pageSize) {
+    setLoading(true);
+    const trimmedSearch = trimString(search);
+    setSearch(trimmedSearch);
+    try {
+      const params = { page: nextPage, limit: nextPageSize };
+      if (trimmedSearch) params.search = trimmedSearch;
+      const { data } = await clientApi.list(params);
+      setClients(data.data);
+      setPagination(data.pagination);
+      setPage(nextPage);
+      setPageSize(nextPageSize);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load clients');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadClients(1);
+  }, []);
+
+  function startCreate() {
+    setEditingId('new');
+    setForm(emptyClient);
+  }
+
+  function startEdit(client) {
+    setEditingId(client._id);
+    setForm({
+      name: client.name,
+      code: client.code,
+      isActive: client.isActive !== false,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyClient);
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    const payload = trimFormStrings(form, ['name', 'code']);
+    if (!payload.name) {
+      setError('Client name is required');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      if (editingId === 'new') {
+        await clientApi.create({ ...payload, isActive: form.isActive });
+      } else {
+        await clientApi.update(editingId, { ...payload, isActive: form.isActive });
+      }
+      cancelEdit();
+      await loadClients(page);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save client');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleStatus(client) {
+    try {
+      await clientApi.update(client._id, { isActive: !client.isActive });
+      await loadClients(page);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update client status');
+    }
+  }
+
+  async function handleDelete(client) {
+    if (!window.confirm(`Archive client "${client.name}"?`)) return;
+    try {
+      await clientApi.remove(client._id);
+      await loadClients(page);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to archive client');
+    }
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <div className="field field-grow">
+          <label>
+            Search clients
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (setPage(1), loadClients(1, pageSize))}
+              placeholder="Client name or code..."
+            />
+          </label>
+        </div>
+        <button type="button" className="btn btn-secondary" onClick={() => { setPage(1); loadClients(1, pageSize); }}>Search</button>
+        <button type="button" className="btn btn-primary" onClick={startCreate}>New Client</button>
+      </div>
+
+      {error && <div className="error-banner">{error}</div>}
+
+      {editingId && (
+        <form className="form-card" onSubmit={handleSave} style={{ marginBottom: '1rem' }}>
+          <h3>{editingId === 'new' ? 'New Client' : 'Edit Client'}</h3>
+          <div className="form-grid">
+            <label>
+              Client Name
+              <input
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              Client Code
+              <input
+                value={form.code}
+                onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
+                placeholder="Auto-generated if empty"
+              />
+            </label>
+            <label>
+              Status
+              <select
+                value={form.isActive ? 'active' : 'inactive'}
+                onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.value === 'active' }))}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Client'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="table-card">
+        {loading ? (
+          <div className="empty-state">Loading clients...</div>
+        ) : clients.length === 0 ? (
+          <div className="empty-state">No clients found.</div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Client Name</th>
+                  <th>Code</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((client) => (
+                  <tr key={client._id}>
+                    <td>{client.name}</td>
+                    <td>{client.code}</td>
+                    <td>{client.isActive ? 'Active' : 'Inactive'}</td>
+                    <td>
+                      <div className="actions">
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => startEdit(client)}>
+                          Edit
+                        </button>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleToggleStatus(client)}>
+                          {client.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(client)}>
+                          Archive
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <Pagination
+        pagination={pagination}
+        pageSize={pageSize}
+        onPageChange={(nextPage) => loadClients(nextPage, pageSize)}
+        onPageSizeChange={(nextPageSize) => { setPage(1); loadClients(1, nextPageSize); }}
+        itemLabel="clients"
+      />
+    </div>
+  );
+}
