@@ -43,6 +43,7 @@ export const PERMISSION_GROUPS = [
   { key: 'clients', label: 'Clients', prefix: 'clients:' },
   { key: 'client-masters', label: 'Client Master', prefix: 'client-masters:' },
   { key: 'import', label: 'Import', prefix: 'import:' },
+  { key: 'communications', label: 'Connectors', prefix: 'communications:' },
   { key: 'users', label: 'Users', prefix: 'users:' },
 ];
 
@@ -68,11 +69,13 @@ export const ROLE_PERMISSIONS = {
     'clients:update', 'clients:delete', 'import:read', 'import:create',
     'client-masters:read', 'client-masters:create', 'client-masters:update', 'client-masters:delete',
     'users:read', 'users:create', 'users:update',
+    'communications:read', 'communications:manage', 'communications:configure',
   ],
   operations_executive: [
     'dashboard:read', 'clients:read', 'campaigns:read',
     'camps:read', 'camps:create', 'camps:update', 'camps:execute',
     'client-masters:read', 'client-masters:create', 'client-masters:update',
+    'communications:read', 'communications:manage', 'communications:configure',
   ],
   reviewer: [
     'camps:read', 'camps:review', 'camps:edit-pending',
@@ -100,6 +103,9 @@ export const PERMISSION_LABELS = {
   'clients:delete': 'Archive clients',
   'import:read': 'View import tools',
   'import:create': 'Import camp data',
+  'communications:read': 'View communications inbox',
+  'communications:manage': 'Sync, extract, and process communications',
+  'communications:configure': 'Configure email campaign rules',
   'client-masters:read': 'View client master',
   'client-masters:create': 'Create client master',
   'client-masters:update': 'Edit client master',

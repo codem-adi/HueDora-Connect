@@ -618,14 +618,6 @@ export default function CampsPage() {
                             Approve
                           </button>
                         )}
-                        {camp.status === 'pending_review' && canRejectCamps() && (
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => openCampActionConfirm('reject', camp)}
-                          >
-                            Reject
-                          </button>
-                        )}
                         {camp.status === 'approved' && hasPermission('camps:execute') && (
                           <button className="btn btn-primary btn-sm" onClick={() => openCampActionConfirm('execute', camp)}>
                             Mark Executed

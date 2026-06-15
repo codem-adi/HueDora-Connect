@@ -11,6 +11,9 @@ import ImportPage from './pages/ImportPage';
 import SignupPage from './pages/SignupPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import UsersPage from './pages/UsersPage';
+import CommunicationsEmailPage from './pages/CommunicationsEmailPage';
+import CommunicationsPastePage from './pages/CommunicationsPastePage';
+import CommunicationsWhatsAppPage from './pages/CommunicationsWhatsAppPage';
 
 function PermissionRoute({ permissions, children }) {
   const { user, loading, hasPermission } = useAuth();
@@ -47,6 +50,14 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function CommunicationsRoute({ children }) {
+  const { user, loading, hasPermission } = useAuth();
+  if (loading) return <div className="empty-state">Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!hasPermission('communications:read')) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -70,6 +81,9 @@ function AppRoutes() {
         <Route path="client-masters/:id/edit" element={<PermissionRoute permissions={['client-masters:update']}><ClientMasterFormPage /></PermissionRoute>} />
         <Route path="import" element={<AdminRoute><ImportPage /></AdminRoute>} />
         <Route path="users" element={<StrictAdminRoute><UsersPage /></StrictAdminRoute>} />
+        <Route path="communications/email" element={<CommunicationsRoute><CommunicationsEmailPage /></CommunicationsRoute>} />
+        <Route path="communications/paste" element={<CommunicationsRoute><CommunicationsPastePage /></CommunicationsRoute>} />
+        <Route path="communications/whatsapp" element={<CommunicationsRoute><CommunicationsWhatsAppPage /></CommunicationsRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

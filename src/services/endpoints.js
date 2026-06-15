@@ -73,6 +73,22 @@ export const importApi = {
   deleteTemplate: (id) => api.delete(`/import/templates/${id}`),
 };
 
+export const communicationsApi = {
+  emailStatus: () => api.get('/communications/email/status'),
+  getEmailConfig: () => api.get('/communications/email/config'),
+  updateEmailConfig: (payload) => api.put('/communications/email/config', payload),
+  listEmailMessages: (params) => api.get('/communications/email/messages', { params: trimParams(params) }),
+  getEmailMessage: (id) => api.get(`/communications/email/messages/${id}`),
+  syncEmailMailbox: (payload) => api.post('/communications/email/sync', payload || {}),
+  extractEmailMessage: (id, payload) => api.post(`/communications/email/messages/${id}/extract`, payload || {}),
+  saveEmailPreview: (id, payload) => api.put(`/communications/email/messages/${id}/preview`, payload),
+  processEmailMessage: (id, payload) => api.post(`/communications/email/messages/${id}/process`, payload || {}),
+  archiveEmailMessage: (id) => api.post(`/communications/email/messages/${id}/archive`),
+  restoreEmailMessage: (id) => api.post(`/communications/email/messages/${id}/restore`),
+  extractManualPaste: (payload) => api.post('/communications/paste/extract', payload),
+  processManualPaste: (payload) => api.post('/communications/paste/process', payload),
+};
+
 export const userApi = {
   list: (params) => api.get('/users', { params: trimParams(params) }),
   get: (id) => api.get(`/users/${id}`),

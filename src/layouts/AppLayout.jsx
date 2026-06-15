@@ -11,6 +11,9 @@ const pageTitles = {
   '/client-masters': { title: 'Client Master', subtitle: 'Manage client program, pricing and camp configuration' },
   '/import': { title: 'Excel Import', subtitle: 'Upload, map headers, preview and import camps' },
   '/users': { title: 'Users', subtitle: 'Manage user access, roles and signup approvals' },
+  '/communications/email': { title: 'Email Communications', subtitle: 'Review Gmail inbox, extract camps, and manage campaign email rules' },
+  '/communications/paste': { title: 'Manual Paste', subtitle: 'Paste camp details, extract fields, and create camps' },
+  '/communications/whatsapp': { title: 'WhatsApp Communications', subtitle: 'WhatsApp campaign inbox and handling' },
 };
 
 function getPageMeta(pathname) {
@@ -69,6 +72,14 @@ function IconUsers() {
   );
 }
 
+function IconCommunications() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 12H9.17L8 17.17 6.83 16H4V6h16v10z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -100,6 +111,57 @@ function NavItem({ to, end, label, icon, collapsed }) {
       <span className="nav-link-icon">{icon}</span>
       <span className="nav-link-label">{label}</span>
     </NavLink>
+  );
+}
+
+function NavSubItem({ to, label, collapsed }) {
+  return (
+    <NavLink
+      to={to}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) => `nav-sublink${isActive ? ' active' : ''}`}
+    >
+      <span className="nav-sublink-label">{label}</span>
+    </NavLink>
+  );
+}
+
+function NavGroup({ label, icon, collapsed, basePath, children }) {
+  const { pathname } = useLocation();
+  const isActive = pathname.startsWith(basePath);
+  const [open, setOpen] = useState(isActive);
+
+  useEffect(() => {
+    if (isActive) setOpen(true);
+  }, [isActive]);
+
+  if (collapsed) {
+    return (
+      <NavLink
+        to={`${basePath}/email`}
+        title={label}
+        className={() => `nav-link${isActive ? ' active' : ''}`}
+      >
+        <span className="nav-link-icon">{icon}</span>
+        <span className="nav-link-label">{label}</span>
+      </NavLink>
+    );
+  }
+
+  return (
+    <div className={`nav-group${isActive ? ' is-active' : ''}${open ? ' is-open' : ''}`}>
+      <button
+        type="button"
+        className="nav-group-toggle"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <span className="nav-link-icon">{icon}</span>
+        <span className="nav-link-label">{label}</span>
+        <span className="nav-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="nav-submenu">{children}</div>}
+    </div>
   );
 }
 
@@ -167,6 +229,13 @@ export default function AppLayout() {
           )}
           {isAdminUser() && (
             <NavItem to="/import" label="Excel Import" icon={<IconImport />} collapsed={sidebarCollapsed} />
+          )}
+          {hasPermission('communications:read') && (
+            <NavGroup label="Connectors" icon={<IconCommunications />} collapsed={sidebarCollapsed} basePath="/communications">
+              <NavSubItem to="/communications/email" label="Email" collapsed={sidebarCollapsed} />
+              <NavSubItem to="/communications/paste" label="Manual paste" collapsed={sidebarCollapsed} />
+              <NavSubItem to="/communications/whatsapp" label="WhatsApp" collapsed={sidebarCollapsed} />
+            </NavGroup>
           )}
           {isStrictAdmin() && (
             <NavItem to="/users" label="Users" icon={<IconUsers />} collapsed={sidebarCollapsed} />

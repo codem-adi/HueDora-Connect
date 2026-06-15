@@ -269,18 +269,18 @@ export default function ImportPage() {
           <h3>Upload Excel / CSV</h3>
           {isAdminImport ? (
             <p className="import-intro">
-              Upload camp data from Excel with automatic header suggestions, or download the sample file to share the standard format with your team.
+              Upload camp data from Excel with automatic header suggestions, or download the sample file. Columns match Client Master (client + division + camp name) and the Create Camp form.
             </p>
           ) : (
             <p className="import-intro">
-              Download the sample Excel file, fill in your camp details using the same column headers, then upload it here.
+              Download the sample Excel file and fill in camp details using the same column headers as the website (client, program, and camp scheduling fields).
             </p>
           )}
 
           <div className="sample-download-panel">
             <div>
               <strong>{isAdminImport ? 'Standard import format' : 'Step 1: Use the standard format'}</strong>
-              <p>Download the sample file with the correct column headers and 15 example camp rows.</p>
+              <p>Download the sample file with the correct column headers and 15 example rows. Only fields shown on Client Master and Create Camp are included.</p>
             </div>
             <button type="button" className="btn btn-secondary" onClick={handleDownloadSample}>
               Download Sample Excel

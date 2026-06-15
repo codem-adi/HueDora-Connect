@@ -45,11 +45,13 @@ export function AuthProvider({ children }) {
           'clients:update', 'clients:delete', 'import:read', 'import:create',
           'client-masters:read', 'client-masters:create', 'client-masters:update', 'client-masters:delete',
           'users:read', 'users:create', 'users:update', 'campaigns:read',
+          'communications:read', 'communications:manage', 'communications:configure',
         ],
         operations_executive: [
           'dashboard:read', 'clients:read', 'campaigns:read',
           'camps:read', 'camps:create', 'camps:update', 'camps:execute',
           'client-masters:read', 'client-masters:create', 'client-masters:update',
+          'communications:read', 'communications:manage', 'communications:configure',
         ],
         reviewer: [
           'camps:read', 'camps:review', 'camps:edit-pending',

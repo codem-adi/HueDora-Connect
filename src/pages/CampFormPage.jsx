@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { campApi, clientApi, clientMasterApi } from '../services/endpoints';
 import { trimFormStrings } from '../utils/trimInput';
 import { toApiDateValue } from '../utils/dateFormat';
+import { computeEndTime } from '../utils/campSchedule';
 import { CampNameSelect } from '../components/CampNameSelect';
 import { DateInput } from '../components/DateInput';
 import { FormPageHeader } from '../components/FormPageHeader';
@@ -38,7 +39,7 @@ function filterApprovalBlockers(blockers, form) {
 const formStringFields = [
   'campaignName', 'doctorName', 'doctorCode', 'hospitalName',
   'campAddress', 'city', 'state', 'pincode', 'startTime', 'endTime',
-  'fieldPersonName', 'fieldPersonPhone', 'technicianName', 'remarks',
+  'fieldPersonName', 'fieldPersonPhone', 'remarks',
 ];
 
 const DURATION_OPTIONS = [3, 4, 5, 6, 8];
@@ -61,7 +62,6 @@ const emptyForm = {
   expectedPatients: 50,
   fieldPersonName: '',
   fieldPersonPhone: '',
-  technicianName: '',
   remarks: '',
   source: 'dashboard',
 };
@@ -166,7 +166,6 @@ export default function CampFormPage() {
           expectedPatients: camp.expectedPatients ?? 50,
           fieldPersonName: camp.fieldPersonName || '',
           fieldPersonPhone: camp.fieldPersonPhone || '',
-          technicianName: camp.technicianName || '',
           remarks: camp.remarks || '',
           source: camp.source || 'dashboard',
         });
@@ -188,12 +187,8 @@ export default function CampFormPage() {
       if (field === 'startTime' || field === 'durationHours') {
         const hours = Number(field === 'durationHours' ? value : next.durationHours) || 3;
         const start = field === 'startTime' ? value : next.startTime;
-        const [h, m] = String(start || '09:00').split(':').map(Number);
-        const total = h * 60 + (m || 0) + hours * 60;
-        const endH = Math.floor(total / 60) % 24;
-        const endM = total % 60;
-        next.endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
         next.durationHours = hours;
+        next.endTime = computeEndTime(start, hours);
       }
       return next;
     });
@@ -441,11 +436,11 @@ export default function CampFormPage() {
             />
           </label>
           <label htmlFor="camp-field-person">
-            Field Person
+            Field Person Name
             <input id="camp-field-person" value={form.fieldPersonName} onChange={(e) => updateField('fieldPersonName', e.target.value)} />
           </label>
           <label htmlFor="camp-field-phone">
-            Field Person Phone
+            Field Person Contact
             <input
               id="camp-field-phone"
               type="tel"
@@ -454,12 +449,6 @@ export default function CampFormPage() {
               onChange={(e) => updateField('fieldPersonPhone', e.target.value.replace(/[^\d+\-\s]/g, ''))}
             />
           </label>
-          {!isEdit && (
-            <label htmlFor="camp-technician">
-              Technician
-              <input id="camp-technician" value={form.technicianName} onChange={(e) => updateField('technicianName', e.target.value)} />
-            </label>
-          )}
           <label className="full" htmlFor="camp-remarks">
             Remarks
             <textarea id="camp-remarks" rows={3} value={form.remarks} onChange={(e) => updateField('remarks', e.target.value)} />
